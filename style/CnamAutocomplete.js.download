@@ -1,0 +1,128 @@
+var CnamAutocomplete = new Class({
+
+	Binds: ['init', 'getElements', 'getLabelList','getMatchingElement'],
+	
+	options : {
+		minLength : 1,
+		maxChoices : 3
+	},
+	elements : [],
+	autoCompl : null,
+	jsonRequest : null,
+	
+	/**
+	* Constructeur de classe
+	* @param data.url 						: l'url de l'API retournant les élements à afficher dans la liste déroulante
+	* @param data.field 					: le champ sous lequel sera affichée la liste déroulante
+	* @param data.options.minLength			: la longueur minimum de la chaîne saisie avant l'affichage de la liste déroulante
+	* @param data.options.maxChoices 		: le nombre maximum de choix affichés dans la liste déroulante
+	* @param data.onSelection				: fonction exécutée lors de la sélection d'un élément dans la liste déroulante
+	* @param data.onSuccess					: fonction exécutée lors du succès de l'appel à lAPI
+	* @param data.onInput					: fonction exécutée lors la saisie dans le champ
+	* @param data.labelSelector	 			: fonction qui retourne le chemin d'accès vers le label affiché dans la liste déroulante
+	* @param data.elementsSelector			: fonction qui retourne les éléments à traiter dans la réponse de l'API
+	* @param data.requestParameter			: paramètre dans la requête pour récupérer la saisie à envoyer à l'API
+	* @param data.requestParameterLatitude 	: paramètre dans la requête pour envoyer la latitude à l'API
+	* @param data.requestParameterLongitude : paramètre dans la requête pour envoyer la longitude à l'API
+	* @param data.errorMessage				: message d'erreur à afficher si l'API est KO
+	* @param data.scoreMini					: score minimum pour l'affichage d'un résultat de l'API BAN
+	*/
+	initialize: function(data) {
+		this.url = data.url || '';
+		this.field = data.field;
+		this.options.minLength = data.options.minLength || '';
+		this.options.maxChoices = data.options.maxChoices || '';
+		this.onSelection = data.onSelection;
+		this.onSuccess = data.onSuccess;
+		this.onInput = data.onInput;
+		this.labelSelector = data.labelSelector;
+		this.elementsSelector = data.elementsSelector;
+		this.requestParameter = data.requestParameter;
+		this.requestParameterLatitude = data.requestParameterLatitude;
+		this.requestParameterLongitude = data.requestParameterLongitude;
+		this.elements = [];
+		this.errorMessage = data.errorMessage;
+		this.scoreMini = data.scoreMini;
+	},
+	
+	init: function() {
+
+		autoCompl = new Autocompleter.Base.Local(
+		  		 	$(this.field),							// ID du champ à utiliser
+				    [], 									// les propositions
+				    {                            		
+				      minLength: this.options.minLength,	// montre les propositions à partir d'1 caractère
+				      maxChoices: this.options.maxChoices,	// nombre max de propositions affichées
+				      filter: function(){
+				      			return this.getLabelList();}.bind(this),
+				      cache: false,
+				      onSelection: this.onSelection
+				    }
+				);
+				
+		this.jsonRequest = new Request({
+		   url: this.url,
+		   method: 'get',
+		   onSuccess: function(reponse){
+		   		var scoreMini = parseFloat(this.scoreMini);
+		   		var reponseJSON = JSON.decode(reponse);
+		   		reponseJSON.codeRetour = 0;
+		       	this.elements = this.elementsSelector(reponseJSON);
+		       	this.elements = this.elements.filter(function(element){
+		       		return element.properties.score > scoreMini;
+		       		});
+				autoCompl.update(autoCompl.filter());
+				this.onSuccess(reponseJSON);
+				
+		   }.bind(this),
+		   onFailure: function(){
+		       	$('messageErreur').innerHTML = this.errorMessage;
+				$('messageErreur').removeClass('invisible');
+		   }.bind(this),
+		   onError: function(){
+		       $('messageErreur').innerHTML = this.errorMessage;
+				$('messageErreur').removeClass('invisible');
+		   }
+		});
+
+		$(this.field).addEvent('input', function(event) {
+			var parameter = {};
+			parameter[this.requestParameter] = event.target.value;
+			if (this.coordinates) {
+				parameter[this.requestParameterLatitude] = this.coordinates.latitude;
+				parameter[this.requestParameterLongitude] = this.coordinates.longitude;
+			}
+			if (event.target.value.length > 0) {
+		  		this.jsonRequest.get(parameter);
+		  	}
+		  	this.onInput(event);
+		 }.bind(this));
+	},
+	
+	getElements : function() {
+		return this.elements;
+	},
+	
+	getLabelList : function() {
+		return this.elements.map(this.labelSelector);
+	},
+	
+	getMatchingElement : function() {
+		return this.elements.find(function(element){
+	  		return this.labelSelector(element).toUpperCase() === $(this.field).value.toUpperCase();
+	 	}.bind(this));
+	},
+	
+	testAPI : function() {
+		return this.jsonRequest.get('q=%20');
+	},
+	
+	setCoordinates : function(coord) {
+		this.coordinates = coord;
+	}
+}
+);
+
+	
+	
+	 
